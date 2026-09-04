@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chinese Character Diagnostic</title>
+<!--
+  ============================================================
+  This page runs a React component directly in the browser,
+  without any build step (no npm, no bundler). Three CDN
+  scripts below make that possible:
+    1. React        — the core library (component logic)
+    2. ReactDOM     — puts React components onto the actual page
+    3. Babel Standalone — translates JSX (the <Tag>-style syntax
+       used inside the component below) into plain JavaScript,
+       live, in the browser. This is why the big <script> further
+       down has type="text/babel" instead of a normal script tag.
+
+  This is the same reason the original .jsx file couldn't be
+  opened directly with Live Server: a .jsx file needs something
+  (normally a build tool) to translate it first. This HTML file
+  does that translation itself, on the fly, via Babel Standalone.
+  ============================================================
+-->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  html, body { margin:0; padding:0; min-height:100%; }
+  #root { min-height:100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+// React and its hooks are loaded globally by the CDN scripts above,
+// so instead of "import { useState, useMemo } from react" (which
+// only works with a build tool), we just pull them off the global
+// React object directly.
+const { useState, useMemo } = React;
+
+/* ---------------------------------------------------------------
+   COLOR / TYPE TOKENS
+   Palette drawn from the physical materials of Chinese literacy
+   instruction: xuan paper, black ink, red grading/seal ink, jade.
+------------------------------------------------------------------ */
+const INK = "#211f1a";
+const INK_SOFT = "#4a463d";
+const PAPER = "#f1e9d8";
+const PAPER_DARK = "#e6dabd";
+const PAPER_LINE = "#c9b98f";
+const SEAL = "#a5321f";
+const SEAL_DARK = "#7c2416";
+const SEAL_SOFT = "rgba(165, 50, 31, 0.32)";
+const JADE = "#3c6b52";
+const JADE_SOFT = "rgba(60, 107, 82, 0.16)";
+const OCHRE = "#a97418";
+
+const FONT_IMPORT =
+  "@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap');";
+
+/* ---------------------------------------------------------------
+   CHARACTER BANK
+   Six tiers loosely tracking HSK1-6, running from foundational to
+   advanced/literary characters appropriate for a MS/HS diagnostic.
+------------------------------------------------------------------ */
+const TIERS = [
+  {
+    id: 1,
+    label: "Tier 1",
+    hsk: "HSK 1",
+    tag: "Foundational",
+    chars: [
+      { char: "我", pinyin: "wǒ", meaning: "I / me" },
+      { char: "你", pinyin: "nǐ", meaning: "you" },
+      { char: "他", pinyin: "tā", meaning: "he" },
+      { char: "她", pinyin: "tā", meaning: "she" },
+      { char: "们", pinyin: "men", meaning: "plural marker" },
+      { char: "的", pinyin: "de", meaning: "possessive particle" },
+      { char: "是", pinyin: "shì", meaning: "to be" },
+      { char: "在", pinyin: "zài", meaning: "at / in / to exist" },
+      { char: "有", pinyin: "yǒu", meaning: "to have" },
+      { char: "不", pinyin: "bù", meaning: "not / no" },
+      { char: "了", pinyin: "le", meaning: "completed-action particle" },
+      { char: "去", pinyin: "qù", meaning: "to go" },
+      { char: "来", pinyin: "lái", meaning: "to come" },
+      { char: "上", pinyin: "shàng", meaning: "up / above" },
+      { char: "下", pinyin: "xià", meaning: "down / below" },
+      { char: "天", pinyin: "tiān", meaning: "day / sky" },
+      { char: "年", pinyin: "nián", meaning: "year" },
+      { char: "月", pinyin: "yuè", meaning: "month / moon" },
+      { char: "好", pinyin: "hǎo", meaning: "good" },
+      { char: "人", pinyin: "rén", meaning: "person" },
+      { char: "大", pinyin: "dà", meaning: "big" },
+      { char: "小", pinyin: "xiǎo", meaning: "small" },
+      { char: "中", pinyin: "zhōng", meaning: "middle" },
+      { char: "国", pinyin: "guó", meaning: "country" },
+      { char: "水", pinyin: "shuǐ", meaning: "water" },
+    ],
+  },
+  {
+    id: 2,
+    label: "Tier 2",
+    hsk: "HSK 2",
+    tag: "Elementary",
+    chars: [
+      { char: "学", pinyin: "xué", meaning: "to study" },
+      { char: "校", pinyin: "xiào", meaning: "school" },
+      { char: "老", pinyin: "lǎo", meaning: "old" },
+      { char: "师", pinyin: "shī", meaning: "teacher" },
+      { char: "朋", pinyin: "péng", meaning: "friend" },
+      { char: "友", pinyin: "yǒu", meaning: "friend" },
+      { char: "买", pinyin: "mǎi", meaning: "to buy" },
+      { char: "卖", pinyin: "mài", meaning: "to sell" },
+      { char: "看", pinyin: "kàn", meaning: "to look / see" },
+      { char: "听", pinyin: "tīng", meaning: "to listen" },
+      { char: "说", pinyin: "shuō", meaning: "to speak" },
+      { char: "写", pinyin: "xiě", meaning: "to write" },
+      { char: "读", pinyin: "dú", meaning: "to read" },
+      { char: "想", pinyin: "xiǎng", meaning: "to think / want" },
+      { char: "爱", pinyin: "ài", meaning: "to love" },
+      { char: "问", pinyin: "wèn", meaning: "to ask" },
+      { char: "知", pinyin: "zhī", meaning: "to know" },
+      { char: "道", pinyin: "dào", meaning: "way / road" },
+      { char: "用", pinyin: "yòng", meaning: "to use" },
+      { char: "做", pinyin: "zuò", meaning: "to do / make" },
+      { char: "玩", pinyin: "wán", meaning: "to play" },
+      { char: "走", pinyin: "zǒu", meaning: "to walk" },
+      { char: "跑", pinyin: "pǎo", meaning: "to run" },
+      { char: "吃", pinyin: "chī", meaning: "to eat" },
+      { char: "喝", pinyin: "hē", meaning: "to drink" },
+    ],
+  },
+  {
+    id: 3,
+    label: "Tier 3",
+    hsk: "HSK 3",
+    tag: "Intermediate",
+    chars: [
+      { char: "因", pinyin: "yīn", meaning: "reason / because" },
+      { char: "所", pinyin: "suǒ", meaning: "place / that which" },
+      { char: "已", pinyin: "yǐ", meaning: "already" },
+      { char: "该", pinyin: "gāi", meaning: "ought to" },
+      { char: "加", pinyin: "jiā", meaning: "to add" },
+      { char: "决", pinyin: "jué", meaning: "to decide" },
+      { char: "果", pinyin: "guǒ", meaning: "fruit / result" },
+      { char: "关", pinyin: "guān", meaning: "to close / relate" },
+      { char: "提", pinyin: "tí", meaning: "to raise / lift" },
+      { char: "境", pinyin: "jìng", meaning: "territory / state" },
+      { char: "高", pinyin: "gāo", meaning: "tall / high" },
+      { char: "兴", pinyin: "xìng", meaning: "interest / mood" },
+      { char: "但", pinyin: "dàn", meaning: "but" },
+      { char: "得", pinyin: "dé", meaning: "to get / obtain" },
+      { char: "从", pinyin: "cóng", meaning: "from" },
+      { char: "到", pinyin: "dào", meaning: "to arrive / to" },
+      { char: "会", pinyin: "huì", meaning: "can / meeting" },
+      { char: "能", pinyin: "néng", meaning: "to be able to" },
+      { char: "要", pinyin: "yào", meaning: "to want / will" },
+      { char: "让", pinyin: "ràng", meaning: "to let / allow" },
+      { char: "给", pinyin: "gěi", meaning: "to give" },
+      { char: "把", pinyin: "bǎ", meaning: "object-marking particle" },
+      { char: "被", pinyin: "bèi", meaning: "passive marker / by" },
+      { char: "还", pinyin: "hái", meaning: "still / also" },
+      { char: "就", pinyin: "jiù", meaning: "just / then" },
+    ],
+  },
+  {
+    id: 4,
+    label: "Tier 4",
+    hsk: "HSK 4",
+    tag: "Upper-Intermediate",
+    chars: [
+      { char: "建", pinyin: "jiàn", meaning: "to build" },
+      { char: "议", pinyin: "yì", meaning: "to discuss" },
+      { char: "适", pinyin: "shì", meaning: "suitable" },
+      { char: "影", pinyin: "yǐng", meaning: "shadow / image" },
+      { char: "响", pinyin: "xiǎng", meaning: "sound / to affect" },
+      { char: "争", pinyin: "zhēng", meaning: "to contend" },
+      { char: "况", pinyin: "kuàng", meaning: "condition" },
+      { char: "压", pinyin: "yā", meaning: "pressure" },
+      { char: "态", pinyin: "tài", meaning: "attitude / state" },
+      { char: "优", pinyin: "yōu", meaning: "excellent" },
+      { char: "极", pinyin: "jí", meaning: "extremely" },
+      { char: "突", pinyin: "tū", meaning: "sudden" },
+      { char: "然", pinyin: "rán", meaning: "like that / -ly suffix" },
+      { char: "却", pinyin: "què", meaning: "however / but" },
+      { char: "虽", pinyin: "suī", meaning: "although" },
+      { char: "且", pinyin: "qiě", meaning: "moreover" },
+      { char: "幸", pinyin: "xìng", meaning: "fortunate" },
+      { char: "福", pinyin: "fú", meaning: "good fortune / blessing" },
+      { char: "险", pinyin: "xiǎn", meaning: "danger / risk" },
+      { char: "复", pinyin: "fù", meaning: "to repeat / complex" },
+      { char: "杂", pinyin: "zá", meaning: "mixed / complicated" },
+      { char: "简", pinyin: "jiǎn", meaning: "simple" },
+      { char: "单", pinyin: "dān", meaning: "single / simple" },
+      { char: "双", pinyin: "shuāng", meaning: "pair / double" },
+      { char: "半", pinyin: "bàn", meaning: "half" },
+    ],
+  },
+  {
+    id: 5,
+    label: "Tier 5",
+    hsk: "HSK 5",
+    tag: "Advanced",
+    chars: [
+      { char: "矛", pinyin: "máo", meaning: "spear" },
+      { char: "盾", pinyin: "dùn", meaning: "shield" },
+      { char: "犹", pinyin: "yóu", meaning: "still / hesitant" },
+      { char: "豫", pinyin: "yù", meaning: "hesitant" },
+      { char: "频", pinyin: "pín", meaning: "frequent" },
+      { char: "繁", pinyin: "fán", meaning: "numerous / complex" },
+      { char: "沮", pinyin: "jǔ", meaning: "dejected" },
+      { char: "丧", pinyin: "sàng", meaning: "to lose (heart)" },
+      { char: "蕴", pinyin: "yùn", meaning: "to contain (latent)" },
+      { char: "憧", pinyin: "chōng", meaning: "to yearn for" },
+      { char: "幽", pinyin: "yōu", meaning: "secluded / dim" },
+      { char: "默", pinyin: "mò", meaning: "silent" },
+      { char: "澄", pinyin: "chéng", meaning: "clear" },
+      { char: "挚", pinyin: "zhì", meaning: "sincere" },
+      { char: "蔼", pinyin: "ǎi", meaning: "amiable" },
+      { char: "眷", pinyin: "juàn", meaning: "to care for / attached" },
+      { char: "憾", pinyin: "hàn", meaning: "regret" },
+      { char: "眺", pinyin: "tiào", meaning: "to gaze into the distance" },
+      { char: "徘", pinyin: "pái", meaning: "to pace" },
+      { char: "徊", pinyin: "huái", meaning: "to pace back and forth" },
+      { char: "黯", pinyin: "àn", meaning: "dark / dim" },
+      { char: "惘", pinyin: "wǎng", meaning: "disappointed / perplexed" },
+      { char: "眸", pinyin: "móu", meaning: "eye / pupil" },
+      { char: "澜", pinyin: "lán", meaning: "big wave" },
+      { char: "曦", pinyin: "xī", meaning: "morning sunlight" },
+    ],
+  },
+  {
+    id: 6,
+    label: "Tier 6",
+    hsk: "HSK 6",
+    tag: "Literary / Near-Native",
+    chars: [
+      { char: "沧", pinyin: "cāng", meaning: "deep blue / desolate" },
+      { char: "桑", pinyin: "sāng", meaning: "mulberry" },
+      { char: "斑", pinyin: "bān", meaning: "speckled" },
+      { char: "斓", pinyin: "lán", meaning: "colorful (in 斑斓)" },
+      { char: "缤", pinyin: "bīn", meaning: "varied and colorful" },
+      { char: "纷", pinyin: "fēn", meaning: "numerous / confused" },
+      { char: "蜿", pinyin: "wān", meaning: "winding" },
+      { char: "蜒", pinyin: "yán", meaning: "winding (snake-like)" },
+      { char: "璀", pinyin: "cuǐ", meaning: "bright / lustrous" },
+      { char: "璨", pinyin: "càn", meaning: "brilliant" },
+      { char: "瑰", pinyin: "guī", meaning: "precious / rare" },
+      { char: "邃", pinyin: "suì", meaning: "deep / profound" },
+      { char: "涟", pinyin: "lián", meaning: "ripples" },
+      { char: "漪", pinyin: "yī", meaning: "ripples" },
+      { char: "皎", pinyin: "jiǎo", meaning: "bright white (moonlight)" },
+      { char: "皓", pinyin: "hào", meaning: "bright white" },
+      { char: "婉", pinyin: "wǎn", meaning: "graceful / gentle" },
+      { char: "翩", pinyin: "piān", meaning: "flying gracefully" },
+      { char: "馨", pinyin: "xīn", meaning: "fragrant" },
+      { char: "韵", pinyin: "yùn", meaning: "rhyme / charm" },
+      { char: "澈", pinyin: "chè", meaning: "clear / thorough" },
+      { char: "隅", pinyin: "yú", meaning: "corner / nook" },
+      { char: "黎", pinyin: "lí", meaning: "dawn / multitude" },
+      { char: "熹", pinyin: "xī", meaning: "faint light" },
+      { char: "黛", pinyin: "dài", meaning: "dark green-black (eyebrows)" },
+    ],
+  },
+];
+
+const QUESTIONS_PER_TIER = 25; // use the full 150-character bank (25 per tier × 6 tiers)
+const ALL_CHARS = TIERS.flatMap((t) => t.chars);
+const PASS_THRESHOLD = 70;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pickDistractors(correctChar, tier, mode) {
+  const textOf = (c) => (mode === "meaning" ? c.meaning : c.pinyin);
+  const used = new Set([textOf(correctChar)]);
+  const results = [];
+
+  // Prefer distractors from the same tier for calibrated difficulty.
+  for (const c of shuffle(tier.chars.filter((c) => c.char !== correctChar.char))) {
+    const text = textOf(c);
+    if (used.has(text)) continue;
+    used.add(text);
+    results.push(text);
+    if (results.length === 3) return results;
+  }
+
+  // Fall back to the full bank if the tier doesn't have enough unique text
+  // (guards against homophones/synonyms like 他/她 both being "tā").
+  for (const c of shuffle(ALL_CHARS.filter((c) => c.char !== correctChar.char))) {
+    const text = textOf(c);
+    if (used.has(text)) continue;
+    used.add(text);
+    results.push(text);
+    if (results.length === 3) return results;
+  }
+  return results;
+}
+
+function buildQuiz() {
+  const questions = [];
+  TIERS.forEach((tier) => {
+    const picked = shuffle(tier.chars).slice(0, QUESTIONS_PER_TIER);
+    picked.forEach((ch) => {
+      const mode = Math.random() < 0.5 ? "meaning" : "pinyin";
+      const correctText = mode === "meaning" ? ch.meaning : ch.pinyin;
+      const distractors = pickDistractors(ch, tier, mode);
+      const options = shuffle([correctText, ...distractors]);
+      questions.push({
+        id: `${tier.id}-${ch.char}`,
+        tierId: tier.id,
+        tierLabel: tier.label,
+        hsk: tier.hsk,
+        char: ch.char,
+        pinyin: ch.pinyin,
+        meaning: ch.meaning,
+        mode,
+        correctText,
+        options,
+      });
+    });
+  });
+  return questions;
+}
+
+/* ---------------------------------------------------------------
+   HAND-DRAWN-STYLE MARK ICONS (grading marks, not generic icons)
+------------------------------------------------------------------ */
+function CheckMark({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <path
+        d="M5 17 L13 25 L27 6"
+        stroke={JADE}
+        strokeWidth="3.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+function CrossMark({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <path d="M6 6 L26 27" stroke={SEAL} strokeWidth="3.4" strokeLinecap="round" />
+      <path d="M26 7 L7 26" stroke={SEAL} strokeWidth="3.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/* ---------------------------------------------------------------
+   TIAN ZI GE (田字格) CHARACTER GRID
+------------------------------------------------------------------ */
+function CharacterGrid({ char, size = 168 }) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        position: "relative",
+        border: `2.5px solid ${INK}`,
+        background: PAPER,
+        boxShadow: "3px 3px 0 rgba(33,31,26,0.08)",
+        margin: "0 auto",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: "50%",
+          width: 0,
+          borderLeft: `1.5px dashed ${SEAL_SOFT}`,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: "50%",
+          height: 0,
+          borderTop: `1.5px dashed ${SEAL_SOFT}`,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "'Noto Serif SC', serif",
+          fontSize: size * 0.62,
+          color: INK,
+          fontWeight: 500,
+          lineHeight: 1,
+        }}
+      >
+        {char}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------
+   MAIN APP
+------------------------------------------------------------------ */
+function ChineseLiteracyAssessment() {
+  const [screen, setScreen] = useState("intro"); // intro | quiz | results
+  const [studentName, setStudentName] = useState("");
+  const [quiz, setQuiz] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [locked, setLocked] = useState(false);
+
+  const currentQ = quiz[currentIndex];
+
+  function startTest() {
+    const q = buildQuiz();
+    setQuiz(q);
+    setCurrentIndex(0);
+    setAnswers([]);
+    setSelected(null);
+    setLocked(false);
+    setScreen("quiz");
+  }
+
+  function restart() {
+    setScreen("intro");
+    setQuiz([]);
+    setCurrentIndex(0);
+    setAnswers([]);
+    setSelected(null);
+    setLocked(false);
+  }
+
+  function handleSelect(optionText) {
+    if (locked || !currentQ) return;
+    const correct = optionText === currentQ.correctText;
+    setSelected(optionText);
+    setLocked(true);
+    const record = { ...currentQ, chosenText: optionText, correct };
+    setAnswers((prev) => [...prev, record]);
+    setTimeout(() => {
+      if (currentIndex + 1 < quiz.length) {
+        setCurrentIndex((i) => i + 1);
+        setSelected(null);
+        setLocked(false);
+      } else {
+        setScreen("results");
+      }
+    }, 850);
+  }
+
+  const tierStats = useMemo(() => {
+    return TIERS.map((tier) => {
+      const tAns = answers.filter((a) => a.tierId === tier.id);
+      const correct = tAns.filter((a) => a.correct).length;
+      const total = tAns.length;
+      const pct = total ? Math.round((correct / total) * 100) : 0;
+      return { ...tier, correct, total, pct };
+    });
+  }, [answers]);
+
+  const totalCorrect = answers.filter((a) => a.correct).length;
+  const totalQ = answers.length;
+  const overallPct = totalQ ? Math.round((totalCorrect / totalQ) * 100) : 0;
+
+  const estimatedTier = useMemo(() => {
+    let est = null;
+    for (const t of tierStats) {
+      if (t.total > 0 && t.pct >= PASS_THRESHOLD) est = t;
+      else break;
+    }
+    return est;
+  }, [tierStats]);
+
+  const levelLabel = estimatedTier ? estimatedTier.hsk : "Pre-HSK 1";
+  const levelSub = estimatedTier ? estimatedTier.tag : "Beginning";
+
+  const missed = answers.filter((a) => !a.correct);
+
+  return (
+    <div
+      style={{
+        minHeight: "100%",
+        background: PAPER,
+        backgroundImage:
+          "radial-gradient(circle at 1px 1px, rgba(33,31,26,0.05) 1px, transparent 0)",
+        backgroundSize: "18px 18px",
+        color: INK,
+        fontFamily: "'Noto Serif', serif",
+        padding: "28px 16px 60px",
+        boxSizing: "border-box",
+      }}
+    >
+      <style>{`
+        ${FONT_IMPORT}
+        .clc-btn {
+          font-family: 'Noto Serif', serif;
+          cursor: pointer;
+          transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+        }
+        .clc-btn:hover { transform: translateY(-1px); }
+        .clc-btn:active { transform: translateY(0px); }
+        .clc-btn:focus-visible {
+          outline: 2.5px solid ${SEAL};
+          outline-offset: 2px;
+        }
+        .clc-option:focus-visible {
+          outline: 2.5px solid ${SEAL};
+          outline-offset: 2px;
+        }
+        .clc-input:focus-visible, .clc-input:focus {
+          outline: 2.5px solid ${SEAL};
+          outline-offset: 1px;
+        }
+        @keyframes stampIn {
+          0% { opacity: 0; transform: scale(1.6) rotate(-18deg); }
+          60% { opacity: 1; transform: scale(0.92) rotate(-7deg); }
+          100% { opacity: 1; transform: scale(1) rotate(-6deg); }
+        }
+        .clc-stamp { animation: stampIn 0.5s ease-out both; animation-delay: 0.15s; }
+        @media (prefers-reduced-motion: reduce) {
+          .clc-stamp { animation: none; }
+          .clc-btn:hover { transform: none; }
+        }
+        @media (max-width: 480px) {
+          .clc-options { grid-template-columns: 1fr !important; }
+          .clc-tierbreak { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+
+      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+        {screen === "intro" && (
+          <IntroScreen
+            studentName={studentName}
+            setStudentName={setStudentName}
+            onStart={startTest}
+          />
+        )}
+
+        {screen === "quiz" && currentQ && (
+          <QuizScreen
+            quiz={quiz}
+            currentIndex={currentIndex}
+            currentQ={currentQ}
+            answers={answers}
+            selected={selected}
+            locked={locked}
+            onSelect={handleSelect}
+          />
+        )}
+
+        {screen === "results" && (
+          <ResultsScreen
+            studentName={studentName}
+            totalCorrect={totalCorrect}
+            totalQ={totalQ}
+            overallPct={overallPct}
+            levelLabel={levelLabel}
+            levelSub={levelSub}
+            tierStats={tierStats}
+            missed={missed}
+            onRestart={restart}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------
+   INTRO
+------------------------------------------------------------------ */
+function IntroScreen({ studentName, setStudentName, onStart }) {
+  return (
+    <div>
+      <div style={{ textAlign: "center", marginBottom: 34 }}>
+        <div
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 12,
+            letterSpacing: "0.16em",
+            color: INK_SOFT,
+            textTransform: "uppercase",
+            marginBottom: 10,
+          }}
+        >
+          Character Literacy Diagnostic
+        </div>
+        <h1
+          style={{
+            fontFamily: "'Noto Serif SC', serif",
+            fontSize: 52,
+            fontWeight: 700,
+            margin: "0 0 6px",
+            letterSpacing: "0.06em",
+          }}
+        >
+          汉字水平测试
+        </h1>
+        <div
+          style={{
+            fontFamily: "'Noto Serif', serif",
+            fontStyle: "italic",
+            color: INK_SOFT,
+            fontSize: 15,
+          }}
+        >
+          Hànzì Shuǐpíng Cèshì — a reading-level check-up, one character at a time
+        </div>
+      </div>
+
+      <div
+        style={{
+          background: PAPER_DARK,
+          border: `1.5px solid ${PAPER_LINE}`,
+          padding: "22px 22px",
+          marginBottom: 24,
+        }}
+      >
+        <p style={{ margin: "0 0 12px", lineHeight: 1.6, fontSize: 15 }}>
+          This diagnostic samples <strong>36 characters</strong> across six
+          proficiency tiers, from foundational (HSK 1) to literary (HSK 6).
+          For each character you'll be asked either its{" "}
+          <strong>meaning</strong> or its <strong>pinyin</strong> — the test
+          climbs in difficulty, tier by tier, to find the edge of what a
+          student can reliably read.
+        </p>
+        <p style={{ margin: 0, lineHeight: 1.6, fontSize: 15, color: INK_SOFT }}>
+          Takes about 8–10 minutes. At the end you'll get an estimated
+          reading level plus a tier-by-tier breakdown and a review list of
+          any characters missed.
+        </p>
+      </div>
+
+      <label
+        style={{
+          display: "block",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 12,
+          letterSpacing: "0.08em",
+          color: INK_SOFT,
+          textTransform: "uppercase",
+          marginBottom: 8,
+        }}
+      >
+        Student name <span style={{ opacity: 0.6 }}>(optional)</span>
+      </label>
+      <input
+        className="clc-input"
+        value={studentName}
+        onChange={(e) => setStudentName(e.target.value)}
+        placeholder="e.g. Jordan Lee"
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "12px 14px",
+          fontSize: 15,
+          fontFamily: "'Noto Serif', serif",
+          border: `1.5px solid ${INK}`,
+          background: PAPER,
+          color: INK,
+          marginBottom: 26,
+        }}
+      />
+
+      <button
+        className="clc-btn"
+        onClick={onStart}
+        style={{
+          display: "block",
+          width: "100%",
+          padding: "16px 20px",
+          fontSize: 17,
+          fontWeight: 700,
+          color: PAPER,
+          background: SEAL,
+          border: "none",
+          boxShadow: "3px 3px 0 rgba(33,31,26,0.25)",
+        }}
+      >
+        开始测试 &nbsp;·&nbsp; Start Test
+      </button>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------
+   QUIZ
+------------------------------------------------------------------ */
+function QuizScreen({ quiz, currentIndex, currentQ, answers, selected, locked, onSelect }) {
+  const promptText =
+    currentQ.mode === "meaning"
+      ? "What does this character mean?"
+      : "What is the pinyin (with tone) for this character?";
+
+  return (
+    <div>
+      {/* progress track */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 4,
+          marginBottom: 22,
+          justifyContent: "center",
+        }}
+      >
+        {quiz.map((q, i) => {
+          const done = answers[i];
+          let bg = "transparent";
+          let border = PAPER_LINE;
+          if (done) {
+            bg = done.correct ? JADE_SOFT : SEAL_SOFT;
+            border = done.correct ? JADE : SEAL;
+          } else if (i === currentIndex) {
+            border = INK;
+          }
+          return (
+            <div
+              key={q.id}
+              title={`Q${i + 1} · ${q.tierLabel}`}
+              style={{
+                width: 16,
+                height: 16,
+                background: bg,
+                border: `1.5px solid ${border}`,
+                boxSizing: "border-box",
+              }}
+            />
+          );
+        })}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 18,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 12,
+          letterSpacing: "0.06em",
+          color: INK_SOFT,
+        }}
+      >
+        <span>
+          QUESTION {String(currentIndex + 1).padStart(2, "0")} / {quiz.length}
+        </span>
+        <span
+          style={{
+            padding: "3px 9px",
+            border: `1px solid ${OCHRE}`,
+            color: OCHRE,
+            textTransform: "uppercase",
+          }}
+        >
+          {currentQ.hsk} · {currentQ.tag}
+        </span>
+      </div>
+
+      <div style={{ textAlign: "center", marginBottom: 22 }}>
+        <CharacterGrid char={currentQ.char} />
+      </div>
+
+      <p
+        style={{
+          textAlign: "center",
+          fontSize: 17,
+          fontWeight: 600,
+          marginBottom: 20,
+        }}
+      >
+        {promptText}
+      </p>
+
+      <div
+        className="clc-options"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+        }}
+      >
+        {currentQ.options.map((opt, i) => {
+          const letter = String.fromCharCode(65 + i);
+          const isSelected = selected === opt;
+          const isCorrectOpt = opt === currentQ.correctText;
+          let borderColor = INK;
+          let bg = PAPER;
+          if (locked && isSelected) {
+            borderColor = isCorrectOpt ? JADE : SEAL;
+            bg = isCorrectOpt ? JADE_SOFT : SEAL_SOFT;
+          } else if (locked && isCorrectOpt) {
+            borderColor = JADE;
+          }
+          return (
+            <button
+              key={opt}
+              className="clc-btn clc-option"
+              disabled={locked}
+              onClick={() => onSelect(opt)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                textAlign: "left",
+                padding: "13px 14px",
+                fontSize: 15,
+                border: `1.75px solid ${borderColor}`,
+                background: bg,
+                color: INK,
+                cursor: locked ? "default" : "pointer",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 700,
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  border: `1.5px solid ${INK}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 11,
+                  flexShrink: 0,
+                }}
+              >
+                {letter}
+              </span>
+              <span style={{ flex: 1 }}>{opt}</span>
+              {locked && isSelected && (isCorrectOpt ? <CheckMark size={20} /> : <CrossMark size={20} />)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------
+   RESULTS
+------------------------------------------------------------------ */
+function ResultsScreen({
+  studentName,
+  totalCorrect,
+  totalQ,
+  overallPct,
+  levelLabel,
+  levelSub,
+  tierStats,
+  missed,
+  onRestart,
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          position: "relative",
+          background: PAPER_DARK,
+          border: `1.5px solid ${INK}`,
+          padding: "30px 24px 26px",
+          marginBottom: 26,
+          overflow: "visible",
+        }}
+      >
+        {/* red circled score, teacher-grading style */}
+        <div
+          style={{
+            position: "absolute",
+            top: -18,
+            right: -10,
+            width: 74,
+            height: 74,
+            borderRadius: "50%",
+            border: `3px solid ${SEAL}`,
+            transform: "rotate(-9deg)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: PAPER,
+          }}
+        >
+          <div style={{ textAlign: "center", lineHeight: 1.05 }}>
+            <div
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 700,
+                fontSize: 18,
+                color: SEAL,
+              }}
+            >
+              {totalCorrect}/{totalQ}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 12,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: INK_SOFT,
+            marginBottom: 8,
+          }}
+        >
+          {studentName ? `${studentName}'s Results` : "Results"}
+        </div>
+        <h2
+          style={{
+            margin: "0 0 4px",
+            fontSize: 26,
+            fontFamily: "'Noto Serif', serif",
+          }}
+        >
+          {overallPct}% overall accuracy
+        </h2>
+        <p style={{ margin: 0, color: INK_SOFT, fontSize: 14 }}>
+          {totalCorrect} of {totalQ} characters answered correctly across six
+          tiers.
+        </p>
+
+        {/* seal stamp with estimated level */}
+        <div
+          className="clc-stamp"
+          style={{
+            marginTop: 22,
+            display: "inline-flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 132,
+            height: 132,
+            border: `3px solid ${SEAL}`,
+            color: SEAL,
+            transform: "rotate(-6deg)",
+            padding: 10,
+            boxSizing: "border-box",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Noto Serif SC', serif",
+              fontSize: 13,
+              letterSpacing: "0.08em",
+              marginBottom: 4,
+            }}
+          >
+            估计水平
+          </div>
+          <div
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontWeight: 700,
+              fontSize: 20,
+              lineHeight: 1.1,
+              textAlign: "center",
+            }}
+          >
+            {levelLabel}
+          </div>
+          <div
+            style={{
+              fontSize: 10.5,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              marginTop: 4,
+              textAlign: "center",
+            }}
+          >
+            {levelSub}
+          </div>
+        </div>
+        <p style={{ marginTop: 14, fontSize: 13, color: INK_SOFT, maxWidth: 420, lineHeight: 1.5 }}>
+          Estimated level is the highest tier where accuracy stayed at or
+          above {PASS_THRESHOLD}%. Review the tier breakdown below for the
+          full picture — a student can be solid in one tier and shaky in
+          another.
+        </p>
+      </div>
+
+      {/* tier breakdown */}
+      <h3
+        style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 13,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: INK_SOFT,
+          marginBottom: 12,
+        }}
+      >
+        Tier Breakdown
+      </h3>
+      <div style={{ marginBottom: 30 }}>
+        {tierStats.map((t) => (
+          <div key={t.id} style={{ marginBottom: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 13,
+                marginBottom: 4,
+              }}
+            >
+              <span>
+                <strong>{t.hsk}</strong>{" "}
+                <span style={{ color: INK_SOFT }}>· {t.tag}</span>
+              </span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", color: INK_SOFT }}>
+                {t.correct}/{t.total}
+              </span>
+            </div>
+            <div
+              style={{
+                height: 10,
+                background: PAPER_DARK,
+                border: `1px solid ${PAPER_LINE}`,
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  width: `${t.pct}%`,
+                  background: t.pct >= PASS_THRESHOLD ? JADE : SEAL,
+                  transition: "width 0.4s ease",
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* missed characters */}
+      {missed.length > 0 && (
+        <>
+          <h3
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 13,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: INK_SOFT,
+              marginBottom: 12,
+            }}
+          >
+            Characters to Review ({missed.length})
+          </h3>
+          <div
+            className="clc-tierbreak"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+              marginBottom: 30,
+            }}
+          >
+            {missed.map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  border: `1.5px solid ${SEAL}`,
+                  background: "rgba(165,50,31,0.06)",
+                  padding: "9px 10px",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Noto Serif SC', serif",
+                    fontSize: 26,
+                    width: 40,
+                    height: 40,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: `1.5px solid ${INK}`,
+                    background: PAPER,
+                    flexShrink: 0,
+                  }}
+                >
+                  {m.char}
+                </div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.35 }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace" }}>{m.pinyin}</div>
+                  <div style={{ color: INK_SOFT }}>{m.meaning}</div>
+                  <div style={{ color: OCHRE, fontSize: 11 }}>{m.hsk}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {missed.length === 0 && (
+        <div
+          style={{
+            border: `1.5px solid ${JADE}`,
+            background: JADE_SOFT,
+            padding: "16px 16px",
+            marginBottom: 30,
+            fontSize: 14,
+          }}
+        >
+          Perfect run — every character was answered correctly. Consider a
+          harder follow-up assessment to find the true ceiling.
+        </div>
+      )}
+
+      <button
+        className="clc-btn"
+        onClick={onRestart}
+        style={{
+          display: "block",
+          width: "100%",
+          padding: "15px 20px",
+          fontSize: 15,
+          fontWeight: 700,
+          color: INK,
+          background: PAPER,
+          border: `2px solid ${INK}`,
+        }}
+      >
+        重新测试 &nbsp;·&nbsp; Retake Test
+      </button>
+    </div>
+  );
+}
+
+
+// This is the line that actually puts the component on the page,
+// replacing the empty <div id="root"></div> above with the live app.
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<ChineseLiteracyAssessment />);
+</script>
+</body>
+</html>
